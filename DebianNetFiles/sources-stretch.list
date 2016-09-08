@@ -1,0 +1,3 @@
+deb http://mirror.cs.nchu.edu.tw/debian/ stretch main contrib non-free
+deb http://mirror.cs.nchu.edu.tw/debian/ stretch-updates main contrib non-free
+deb http://mirror.cs.nchu.edu.tw/debian/ stretch-proposed-updates main contrib non-free

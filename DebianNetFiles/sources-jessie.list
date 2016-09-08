@@ -1,0 +1,3 @@
+deb http://mirror.cs.nchu.edu.tw/debian/ jessie main contrib non-free
+deb http://mirror.cs.nchu.edu.tw/debian/ jessie-updates main contrib non-free
+deb http://mirror.cs.nchu.edu.tw/debian/ jessie-proposed-updates main contrib non-free
