@@ -149,11 +149,23 @@ function restore-lan {
 } #end restore-lan
 
 function start {
+
+    # Pre start script
+    if [ ! "x${PRESTART}" == "x" ]; then
+        echo "Executing pre-start script"
+        if [ ! -f ${PRESTART} ]; then
+            echo "${PRESTART} not exist!"
+            echo "SKIP"
+        else
+            bash ${PRESTART}
+        fi
+    fi
+    
     # Prepare networking
     start-lan
     
     echo "Starting VM: ${Hostname}..., mem=${MEM}"
-
+    
     CMD=""
     case $Console in
         screen)
@@ -240,9 +252,32 @@ function start {
     # Execute
     echo "$CMD"
     eval $CMD
+
+    # POST start script
+    if [ ! "x${POSTSTART}" == "x" ]; then
+        echo "Executing post-start script"
+        if [ ! -f ${POSTSTART} ]; then
+            echo "${POSTSTART} not exist!"
+            echo "SKIP"
+        else
+            bash ${POSTSTART}
+        fi
+    fi
+    
 } #end start
 
 function stop {
+
+    # PRE stop script
+    if [ ! "x${PRESTOP}" == "x" ]; then
+        echo "Executing pre-stop script"
+        if [ ! -f ${PRESTOP} ]; then
+            echo "${PRESTOP} not exist!"
+            echo "SKIP"
+        else
+            bash ${PRESTOP}
+        fi
+    fi
 
     if [ $EUID -ne 0 ]; then
         sudo echo "Super User passwd, please:"
@@ -271,6 +306,17 @@ function stop {
     fi
 
     restore-lan
+
+    # POST stop script
+    if [ ! "x${POSTSTop}" == "x" ]; then
+        echo "Executing post-stop script"
+        if [ ! -f ${POSTSTOP} ]; then
+            echo "${POSTSTOP} not exist!"
+            echo "SKIP"
+        else
+            bash ${POSTSTOP}
+        fi
+    fi
 } #end stop
 
 function configure {
@@ -478,6 +524,10 @@ Netmask1=
 Bcast1=
 FakeMac1=
 
+PRESTART=
+POSTSTART=
+PRESTOP=
+POSTSTOP=
 EOF
 
     echo "Now you can configure VM or start VM via following commands"
