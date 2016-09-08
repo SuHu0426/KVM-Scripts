@@ -419,7 +419,7 @@ function genconf {
     gw2="${x##*.}" ; x="${x%.*}"
     gw1="${x##*.}"
     Gateway=$gw1.$gw2.$gw3.$gw4
-    PREFIX=`/sbin/ifconfig ${BR} | grep "HWaddr" | sed 's/^br[0-9]*.*Link.*HWaddr //' | cut -d':' -f 1-3`
+    PREFIX=`/sbin/ifconfig ${BR} | grep "HWaddr" | sed 's/^[0-9]*.*Link.*HWaddr //' | cut -d':' -f 1-3`
     F4=`od -An -N1 -x /dev/random | sed 's/^\ 00//'`
     F5=`od -An -N1 -x /dev/random | sed 's/^\ 00//'`
     F6=`od -An -N1 -x /dev/random | sed 's/^\ 00//'`
