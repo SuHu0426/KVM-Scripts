@@ -192,18 +192,23 @@ function start {
     CMD=""
     case $Console in
         screen)
-	    CMD+="screen -S ${Hostname} -d -m "
+	    CMD="screen -S ${Hostname} -d -m "
+            eval $CMD
+            CMD="screen -r ${Hostname} -X stuff \$\""
 	    CMD+="kvm -name ${Hostname} -localtime -enable-kvm "
 	    CMD+="-curses "
 	    ;;
         serial-screen)
-	    CMD+="screen -S ${Hostname} -d -m "
+            CMD="screen -S ${Hostname} -d -m "
+            echo "$CMD"
+            eval $CMD
+            CMD="screen -r ${Hostname} -X stuff \$\""
 	    CMD+="kvm -name ${Hostname} -localtime -enable-kvm "
-	    CMD+="-nographic -serial stdio "
+	    CMD+="-serial stdio -nographic "
 	    ;;
         serial-stdio)
 	    CMD+="kvm -name ${Hostname} -localtime -enable-kvm "
-	    CMD+="-nographic -serial stdio "
+	    CMD+="-serial stdio -nographic "
 	    ;;
         *)
 	    CMD+="kvm -name ${Hostname} -localtime -enable-kvm "
@@ -281,8 +286,21 @@ function start {
     if [ -n "${OPTARG}" ]; then
         CMD+="${OPTARG} "
     fi
-    
-    CMD+="&"
+
+    case $Console in
+        screen)
+	    CMD+="\\n\""
+	    ;;
+        serial-screen)
+            CMD+="\\n\""
+	    ;;
+        serial-stdio)
+            CMD+="&"
+	    ;;
+        *)
+            CMD+="&"
+	    ;;
+    esac
 
     # Execute
     echo "$CMD"
