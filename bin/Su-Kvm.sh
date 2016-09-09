@@ -3,7 +3,7 @@
 SCRIPT=$0
 
 function usage {
-    echo "Usage: ${SCRIPT} [start|stop] conf"
+    echo "Usage: ${SCRIPT} start|stop conf"
     echo "Usage: ${SCRIPT} configure conf [#RootPartition]"
     echo "Usage: ${SCRIPT} genconf OS.img hostname VM-IP Bridge TAP-No"
     exit 1
@@ -248,10 +248,10 @@ function start {
     case ${NETTYPE} in
         macvlan)
             CMD+="-net nic,vlan=0,netdev=${TAP0},macaddr=${FakeMac0},model=virtio "
-            CMD+="-netdev tap,fd=3,id=${TAP0},vhost=on 3<>/dev/tap$(< /sys/class/net/v${TAP0}/ifindex)"
+            CMD+="-netdev tap,fd=3,id=${TAP0},vhost=on 3<>/dev/tap$(< /sys/class/net/v${TAP0}/ifindex) "
             if [ -n "${BR1}" ]; then
                 CMD+="-net nic,vlan=1,netdev=${TAP1},macaddr=${FakeMac1},model=virtio "
-                CMD+="-netdev tap,fd=4,id=${TAP1},vhost=on 4<>/dev/tap$(< /sys/class/net/v${TAP1}/ifindex)"
+                CMD+="-netdev tap,fd=4,id=${TAP1},vhost=on 4<>/dev/tap$(< /sys/class/net/v${TAP1}/ifindex) "
             fi
             ;;
         ovs)
@@ -304,7 +304,7 @@ function start {
 function stop {
 
     # PRE stop script
-    if [ -n "x${PRESTOP}" ]; then
+    if [ -n "${PRESTOP}" ]; then
         echo "Executing pre-stop script"
         if [ ! -f ${PRESTOP} ]; then
             echo "${PRESTOP} not exist!"
@@ -332,12 +332,16 @@ function stop {
 
     ping -c 3 ${IP0}
     if [ $? -eq 0 ]; then
-        echo "${Hostname} still alive, force shutdown!"
-        echo "quit" | sudo socat - unix-connect:${Sock}
-        echo ""
-        rm ${Sock}
+        if [ -S ${Sock} ]; then
+           echo "${Hostname} still alive, force quit!"
+           echo "quit" | sudo socat - unix-connect:${Sock}
+           echo ""
+           rm ${Sock}
+        fi
     else
-        rm ${Sock}
+        if [ -S ${Sock} ]; then
+            rm ${Sock}
+        fi
     fi
 
     restore-lan
