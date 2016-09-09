@@ -61,20 +61,15 @@ function start-lan {
         fi
     fi
 
-#    COUNTER=0
-#    while [ $COUNTER -lt 10 ]; do
-#        BR=BR$COUNTER
-#        echo $BR
-#        if [ ! -z $BR ]; then
-#            break
-#        fi
-#        TAP=TAP$COUNTER
-#        echo "start $TAP"
-        FakeMac=FakeMac$COUNTER
-        
         if [ ! -d /proc/sys/net/ipv4/conf/${BR0} ]; then
-            echo "Network bridge ${BR} does not exist, start it first."
+            echo "Network bridge ${BR0} does not exist, start it first."
             exit 2
+        fi
+        if [ -n "${BR1}" ]; then
+            if [ ! -d /proc/sys/net/ipv4/conf/${BR1} ]; then
+                echo "Network bridge ${BR1} does not exist, start it first."
+                exit 2
+            fi
         fi
 
         case ${NETTYPE} in
@@ -84,18 +79,35 @@ function start-lan {
                 sudo ip link set dev v${TAP0} up
                 sudo chmod 666 /dev/net/tun
                 sudo chmod 666 /dev/tap$(< /sys/class/net/v${TAP0}/ifindex)
+                if [ -n "${BR1}" ]; then
+                    sudo ip link add link ${BR1} name v${TAP1} address ${FakeMac1} type macvtap mode bridge
+                    sleep 2
+                    sudo ip link set dev v${TAP1} up
+                    sudo chmod 666 /dev/tap$(< /sys/class/net/v${TAP1}/ifindex)
+                fi
             ;;
             ovs)
                 sudo chmod 666 /dev/net/tun
                 sudo tunctl -u ${WHO} -t ${TAP0}
                 sudo /sbin/ifconfig ${TAP0} up
                 sudo ovs-vsctl add-port ${BR0} ${TAP0}
+                if [ -n "${BR1}" ]; then
+                    sudo chmod 666 /dev/net/tun
+                    sudo tunctl -u ${WHO} -t ${TAP1}
+                    sudo /sbin/ifconfig ${TAP1} up
+                    sudo ovs-vsctl add-port ${BR1} ${TAP1}
+                fi
                 ;;
             *)
                 sudo chmod 666 /dev/net/tun
                 sudo tunctl -u ${WHO} -t ${TAP0}
                 sudo /sbin/ifconfig ${TAP0} up
                 sudo ovs-vsctl add-port ${BR0} ${TAP0}
+                if [ -n "${BR1}" ]; then
+                    sudo tunctl -u ${WHO} -t ${TAP1}
+                    sudo /sbin/ifconfig ${TAP1} up
+                    sudo ovs-vsctl add-port ${BR1} ${TAP1}
+                fi
                 ;;
         esac
 
@@ -115,19 +127,17 @@ function restore-lan {
         fi
     fi
     
-#    COUNTER=0
-#    while [ $COUNTER -lt 10 ]; do
-#        BR=BR$COUNTER
-#        if [ ! -z $BR ]; then
-#            break
-#        fi
-#        TAP=TAP$COUNTER
-
         case ${NETTYPE} in
             macvlan)
                 if [ -d /proc/sys/net/ipv4/conf/v${TAP0} ]; then
                     sudo ip link set dev v${TAP0} down
                     sudo ip link delete v${TAP0}
+                fi
+                if [ -n "${TAP1}" ]; then
+                    if [ -d /proc/sys/net/ipv4/conf/v${TAP1} ]; then
+                        sudo ip link set dev v${TAP1} down
+                        sudo ip link delete v${TAP1}
+                    fi
                 fi
             ;;
             ovs)
@@ -136,6 +146,13 @@ function restore-lan {
                     sudo /sbin/ifconfig ${TAP0} down
                     sudo tunctl -d ${TAP0}
                 fi
+                if [ -n "${TAP1}" ]; then
+                    if [ -d /proc/sys/net/ipv4/conf/${TAP1} ]; then
+                        sudo ovs-vsctl del-port ${BR1} ${TAP1}
+                        sudo /sbin/ifconfig ${TAP1} down
+                        sudo tunctl -d ${TAP1}
+                    fi
+                fi
                 ;;
             *)
                 if [ -d /proc/sys/net/ipv4/conf/${TAP0} ]; then
@@ -143,15 +160,21 @@ function restore-lan {
                     sudo /sbin/ifconfig ${TAP0} down
                     sudo tunctl -d ${TAP0}
                 fi
+                if [ -n "${TAP1}" ]; then
+                    if [ -d /proc/sys/net/ipv4/conf/${TAP1} ]; then
+                        sudo ovs-vsctl del-port ${BR1} ${TAP1}
+                        sudo /sbin/ifconfig ${TAP1} down
+                        sudo tunctl -d ${TAP1}
+                    fi
+                fi
                 ;;
         esac
-#    done #end while
 } #end restore-lan
 
 function start {
 
     # Pre start script
-    if [ ! "x${PRESTART}" == "x" ]; then
+    if [ -n "${PRESTART}" ]; then
         echo "Executing pre-start script"
         if [ ! -f ${PRESTART} ]; then
             echo "${PRESTART} not exist!"
@@ -187,7 +210,7 @@ function start {
 	    ;;
     esac
 
-    if [ ! "x${SMP}" == "x" ]; then
+    if [ -n "${SMP}" ]; then
         CMD+="-smp ${SMP} "
     fi
     
@@ -226,24 +249,36 @@ function start {
         macvlan)
             CMD+="-net nic,vlan=0,netdev=${TAP0},macaddr=${FakeMac0},model=virtio "
             CMD+="-netdev tap,fd=3,id=${TAP0},vhost=on 3<>/dev/tap$(< /sys/class/net/v${TAP0}/ifindex)"
+            if [ -n "${BR1}" ]; then
+                CMD+="-net nic,vlan=1,netdev=${TAP1},macaddr=${FakeMac1},model=virtio "
+                CMD+="-netdev tap,fd=4,id=${TAP1},vhost=on 4<>/dev/tap$(< /sys/class/net/v${TAP1}/ifindex)"
+            fi
             ;;
         ovs)
             CMD+="-net nic,vlan=0,netdev=${TAP0},macaddr=${FakeMac0},model=virtio "
             CMD+="-netdev tap,id=${TAP0},ifname=${TAP0},script=no,vhost=on "
+            if [ -n "${BR1}" ]; then
+                CMD+="-net nic,vlan=1,netdev=${TAP1},macaddr=${FakeMac1},model=virtio "
+                CMD+="-netdev tap,id=${TAP1},ifname=${TAP1},script=no,vhost=on "
+            fi
             ;;
         *)
             CMD+="-net nic,vlan=0,netdev=${TAP0},macaddr=${FakeMac0},model=virtio "
             CMD+="-netdev tap,id=${TAP0},ifname=${TAP0},script=no,vhost=on "
+            if [ -n "${BR1}" ]; then
+                CMD+="-net nic,vlan=1,netdev=${TAP1},macaddr=${FakeMac1},model=virtio "
+                CMD+="-netdev tap,id=${TAP1},ifname=${TAP1},script=no,vhost=on "
+            fi
             ;;
     esac
     
     # Hard Disks
     CMD+="-drive index=0,media=disk,if=virtio,file=${IMG} "
-    if [ ! -z "${IMG1}" ]; then
+    if [ -n "${IMG1}" ]; then
         CMD+="-drive index=1,media=disk,if=virtio,file=${IMG1} "
     fi
     # Append Option Argument
-    if [ ! -z "${OPTARG}" ]; then
+    if [ -n "${OPTARG}" ]; then
         CMD+="${OPTARG} "
     fi
     
@@ -254,7 +289,7 @@ function start {
     eval $CMD
 
     # POST start script
-    if [ ! "x${POSTSTART}" == "x" ]; then
+    if [ -n "${POSTSTART}" ]; then
         echo "Executing post-start script"
         if [ ! -f ${POSTSTART} ]; then
             echo "${POSTSTART} not exist!"
@@ -269,7 +304,7 @@ function start {
 function stop {
 
     # PRE stop script
-    if [ ! "x${PRESTOP}" == "x" ]; then
+    if [ -n "x${PRESTOP}" ]; then
         echo "Executing pre-stop script"
         if [ ! -f ${PRESTOP} ]; then
             echo "${PRESTOP} not exist!"
@@ -308,7 +343,7 @@ function stop {
     restore-lan
 
     # POST stop script
-    if [ ! "x${POSTSTop}" == "x" ]; then
+    if [ -n "${POSTSTOP}" ]; then
         echo "Executing post-stop script"
         if [ ! -f ${POSTSTOP} ]; then
             echo "${POSTSTOP} not exist!"
@@ -495,7 +530,7 @@ ROOT=1
 BOOTABLEFLAG=1
 Sock=${SockDir}/${Hostname}.sock
 SMP=
-# Add with -, ex: -usb -usbdevice tablet
+# Add with -, ex: -usb -usbdevice tablet, -cdrom /video/ISOs/vyos-1.1.7-amd64.iso
 OPTARG=""
 
 # Avalable Console variable:
@@ -512,7 +547,6 @@ BR0=${BR}
 TAP0=${TAP}
 IP0=${VMIP}
 Netmask0=${Netmask}
-Bcast0=${Bcast}
 FakeMac0=${FakeMac}
 Gateway=${Gateway}
 
@@ -521,7 +555,6 @@ BR1=
 TAP1=
 IP1=
 Netmask1=
-Bcast1=
 FakeMac1=
 
 PRESTART=
