@@ -1,6 +1,6 @@
 #! /bin/bash
 
-IF=brLAN
+IF=eth0
 if [ $EUID -ne 0 ]
    then sudo echo "Super User passwd, please:"
         if [ $? -ne 0 ]
@@ -12,6 +12,6 @@ fi
 echo "Restore lan..."
 if [ -d /proc/sys/net/ipv4/conf/vlan0 ]; then
     sudo ifconfig vlan0 down
-    sudo ifconfig ${IF} 192.168.180.3
+    sudo ifconfig ${IF} 192.168.180.1
     sudo ip link del vlan0
 fi

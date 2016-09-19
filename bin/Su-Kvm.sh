@@ -252,11 +252,13 @@ function start {
 
     case ${NETTYPE} in
         macvlan)
+            FD0=$(< /sys/class/net/v${TAP0}/ifindex)
+            FD1=$(< /sys/class/net/v${TAP1}/ifindex)
             CMD+="-net nic,vlan=0,netdev=${TAP0},macaddr=${FakeMac0},model=virtio "
-            CMD+="-netdev tap,fd=3,id=${TAP0},vhost=on 3<>/dev/tap$(< /sys/class/net/v${TAP0}/ifindex) "
+            CMD+="-netdev tap,fd=${FD0},id=${TAP0},vhost=on ${FD0}<>/dev/tap${FD0} "
             if [ -n "${BR1}" ]; then
                 CMD+="-net nic,vlan=1,netdev=${TAP1},macaddr=${FakeMac1},model=virtio "
-                CMD+="-netdev tap,fd=4,id=${TAP1},vhost=on 4<>/dev/tap$(< /sys/class/net/v${TAP1}/ifindex) "
+                CMD+="-netdev tap,fd=${FD1},id=${TAP1},vhost=on ${FD1}<>/dev/tap${FD1} "
             fi
             ;;
         ovs)
