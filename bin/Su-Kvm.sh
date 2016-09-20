@@ -394,7 +394,7 @@ function configure {
     Format=`qemu-img info ${IMG} | grep "file format" | sed 's/file format: //'`
     echo "I got ${IMG} format is: ${Format}"
     if [ ${Format} == "raw" ]; then
-        Offset=`/sbin/fdisk -l ${IMG} | grep ${IMG}${PT} | tr -s ' ' | cut -d' ' -f 3`
+        Offset=`/sbin/fdisk -l ${IMG} | grep -F ${IMG}${PT} | tr -s ' ' | cut -d' ' -f 3`
         Offset=`expr ${Offset} '*' 512`
         sudo modprobe loop
         sudo mount -o loop,offset=${Offset} ${IMG} /mnt/tmp
@@ -498,7 +498,7 @@ function genconf {
     IMG="${1}"
     Hostname="${2}"
     VMIP="${3}"
-    BR="${4}"
+    BR0="${4}"
 
     # We also need to test hostname, VM-IP, Ether-card are legal ones.
     TAP="tap${5}"
@@ -512,23 +512,26 @@ function genconf {
 
     # We need to get the Ip of the assigned ether card and its MAC address and get a
     # fake MAC address for our VM.
-    HostIP=`/sbin/ifconfig ${BR} | grep "Bcast" | sed 's/^[ \t]*inet addr://' | sed 's/[ \t]*Bcast:.*$//'`
+    HostIP=`/sbin/ifconfig ${BR0} | grep "Bcast" | sed 's/^[ \t]*inet addr://' | sed 's/[ \t]*Bcast:.*$//'`
     ip4="${HostIP##*.}" ; x="${HostIP%.*}"
     ip3="${x##*.}" ; x="${x%.*}"
     ip2="${x##*.}" ; x="${x%.*}"
     ip1="${x##*.}"
-    Netmask=`/sbin/ifconfig ${BR} | grep "Bcast" | sed 's/^[ \t]*.*Mask://'`
-    Bcast=`/sbin/ifconfig ${BR} | grep "Bcast" | tr -s ' ' | cut -d ' ' -f 4 | sed 's/^[ \t]*.*Bcast://'`
+    Netmask0=`/sbin/ifconfig ${BR0} | grep "Bcast" | sed 's/^[ \t]*.*Mask://'`
+    Bcast0=`/sbin/ifconfig ${BR0} | grep "Bcast" | tr -s ' ' | cut -d ' ' -f 4 | sed 's/^[ \t]*.*Bcast://'`
     let gw4="(${Bcast##*.}-1)" ; x="${Bcast%.*}"
     gw3="${x##*.}" ; x="${x%.*}"
     gw2="${x##*.}" ; x="${x%.*}"
     gw1="${x##*.}"
     Gateway=$gw1.$gw2.$gw3.$gw4
-    PREFIX=`/sbin/ifconfig ${BR} | grep "HWaddr" | sed 's/^[0-9]*.*Link.*HWaddr //' | cut -d':' -f 1-3`
+    PREFIX=`/sbin/ifconfig ${BR0} | grep -F HWaddr | sed 's/^[0-9]*.*Link.*HWaddr //' | cut -d':' -f 1-3`
+    if [ -n $PREFIX ]; then
+        PREFIX=`/sbin/ifconfig ${BR0} | grep -F ether | cut -d':' -f 1-3 | tr -s ' ' | sed s'/ ether //'`
+    fi
     F4=`od -An -N1 -x /dev/random | sed 's/^\ 00//'`
     F5=`od -An -N1 -x /dev/random | sed 's/^\ 00//'`
     F6=`od -An -N1 -x /dev/random | sed 's/^\ 00//'`
-    FakeMac=$PREFIX:${F4}:${F5}:${F6}
+    FakeMac0=$PREFIX:${F4}:${F5}:${F6}
     echo " I got current IP: ${HostIP}, FakeMac: ${FakeMac}"
 
     if [ ! -d ../conf.d ]; then
@@ -567,12 +570,12 @@ IMG1=
 # Network0 setting
 # [ovs | macvlan] future uml-sw vde-sw
 NETTYPE=ovs
-BR0=${BR}
+BR0=${BR0}
 TAP0=${TAP}
 IP0=${VMIP}
-Netmask0=${Netmask}
-FakeMac0=${FakeMac}
-Gateway=${Gateway}
+Netmask0=${Netmask0}
+FakeMac0=${FakeMac0}
+Gateway=${Gateway0}
 
 # Network1 setting
 BR1=
