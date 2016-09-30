@@ -5,7 +5,7 @@ SCRIPT=$0
 function usage {
     echo "Usage: ${SCRIPT} start|stop conf"
     echo "Usage: ${SCRIPT} configure conf [#RootPartition]"
-    echo "Usage: ${SCRIPT} genconf OS.img hostname VM-IP Bridge TAP-No"
+    echo "Usage: ${SCRIPT} genconf OS.img hostname VM-IP Bridge TAP"
     exit 1
 }
 
@@ -15,7 +15,7 @@ function usage_configure {
 }
 
 function usage_genconf {
-    echo "Usage: ${SCRIPT} genconf OS.img hostname VM-IP Bridge TAP-No"
+    echo "Usage: ${SCRIPT} genconf OS.img hostname VM-IP Bridge TAP"
     exit 3
 }
 
@@ -61,53 +61,38 @@ function start-lan {
         fi
     fi
 
-        if [ ! -d /proc/sys/net/ipv4/conf/${BR0} ]; then
-            echo "Network bridge ${BR0} does not exist, start it first."
+    for br in ${Bridge[*]}; do
+        if [ ! -d /proc/sys/net/ipv4/conf/${br} ]; then
+            echo "Network bridge ${br} does not exist, start it first."
             exit 2
         fi
-        if [ -n "${BR1}" ]; then
-            if [ ! -d /proc/sys/net/ipv4/conf/${BR1} ]; then
-                echo "Network bridge ${BR1} does not exist, start it first."
-                exit 2
-            fi
-        fi
-
+    done
+    
         case ${NETTYPE} in
             macvlan)
-                sudo ip link add link ${BR0} name v${TAP0} address ${FakeMac0} type macvtap mode bridge
-                sleep 2
-                sudo ip link set dev v${TAP0} up
-                sudo chmod 666 /dev/net/tun
-                sudo chmod 666 /dev/tap$(< /sys/class/net/v${TAP0}/ifindex)
-                if [ -n "${BR1}" ]; then
-                    sudo ip link add link ${BR1} name v${TAP1} address ${FakeMac1} type macvtap mode bridge
+                for (( c=0; c<${#Bridge[*]}; c++ )); do
+                    sudo ip link add link ${Bridge[$c]} name v${TAP[$c]} address ${MACAddress[$c]} type macvtap mode bridge
                     sleep 2
-                    sudo ip link set dev v${TAP1} up
-                    sudo chmod 666 /dev/tap$(< /sys/class/net/v${TAP1}/ifindex)
-                fi
+                    sudo ip link set dev v${TAP[$c]} up
+                    sudo chmod 666 /dev/net/tun
+                    sudo chmod 666 /dev/tap$(< /sys/class/net/v${TAP[$c]}/ifindex)
+                done
             ;;
             ovs)
                 sudo chmod 666 /dev/net/tun
-                sudo tunctl -u ${WHO} -t ${TAP0}
-                sudo /sbin/ifconfig ${TAP0} up
-                sudo ovs-vsctl add-port ${BR0} ${TAP0}
-                if [ -n "${BR1}" ]; then
-                    sudo chmod 666 /dev/net/tun
-                    sudo tunctl -u ${WHO} -t ${TAP1}
-                    sudo /sbin/ifconfig ${TAP1} up
-                    sudo ovs-vsctl add-port ${BR1} ${TAP1}
-                fi
+                for (( c=0; c<${#Bridge[*]}; c++ )); do
+                    sudo tunctl -u ${WHO} -t ${TAP[$c]}
+                    sudo /sbin/ifconfig ${TAP[$c]} up
+                    sudo ovs-vsctl add-port ${Bridge[$c]} ${TAP[$c]}
+                done
                 ;;
             *)
                 sudo chmod 666 /dev/net/tun
-                sudo tunctl -u ${WHO} -t ${TAP0}
-                sudo /sbin/ifconfig ${TAP0} up
-                sudo ovs-vsctl add-port ${BR0} ${TAP0}
-                if [ -n "${BR1}" ]; then
-                    sudo tunctl -u ${WHO} -t ${TAP1}
-                    sudo /sbin/ifconfig ${TAP1} up
-                    sudo ovs-vsctl add-port ${BR1} ${TAP1}
-                fi
+                for (( c=0; c<${#Bridge[*]}; c++ )); do
+                    sudo tunctl -u ${WHO} -t ${TAP[$c]}
+                    sudo /sbin/ifconfig ${TAP[$c]} up
+                    sudo ovs-vsctl add-port ${Bridge[$c]} ${TAP[$c]}
+                done
                 ;;
         esac
 
@@ -127,48 +112,34 @@ function restore-lan {
         fi
     fi
     
-        case ${NETTYPE} in
-            macvlan)
-                if [ -d /proc/sys/net/ipv4/conf/v${TAP0} ]; then
-                    sudo ip link set dev v${TAP0} down
-                    sudo ip link delete v${TAP0}
+    case ${NETTYPE} in
+        macvlan)
+            for tap in ${TAP[*]}; do
+                if [ -d /proc/sys/net/ipv4/conf/v${tap} ]; then
+                    sudo ip link set dev v${tap} down
+                    sudo ip link delete v${tap}
                 fi
-                if [ -n "${TAP1}" ]; then
-                    if [ -d /proc/sys/net/ipv4/conf/v${TAP1} ]; then
-                        sudo ip link set dev v${TAP1} down
-                        sudo ip link delete v${TAP1}
-                    fi
-                fi
+            done
             ;;
-            ovs)
-                if [ -d /proc/sys/net/ipv4/conf/${TAP0} ]; then
-                    sudo ovs-vsctl del-port ${BR0} ${TAP0}
-                    sudo /sbin/ifconfig ${TAP0} down
-                    sudo tunctl -d ${TAP0}
+        ovs)
+            for (( c=0; c<${#TAP[*]}; c++ )); do
+                if [ -d /proc/sys/net/ipv4/conf/${TAP[$c]} ]; then
+                    sudo ovs-vsctl del-port ${Bridge[$c]} ${TAP[$c]}
+                    sudo /sbin/ifconfig ${TAP[$c]} down
+                    sudo tunctl -d ${TAP[$c]}
                 fi
-                if [ -n "${TAP1}" ]; then
-                    if [ -d /proc/sys/net/ipv4/conf/${TAP1} ]; then
-                        sudo ovs-vsctl del-port ${BR1} ${TAP1}
-                        sudo /sbin/ifconfig ${TAP1} down
-                        sudo tunctl -d ${TAP1}
-                    fi
+            done
+            ;;
+        *)
+            for (( c=0; c<${#TAP[*]}; c++ )); do
+                if [ -d /proc/sys/net/ipv4/conf/${TAP[$c]} ]; then
+                    sudo ovs-vsctl del-port ${Bridge[$c]} ${TAP[$c]}
+                    sudo /sbin/ifconfig ${TAP[$c]} down
+                    sudo tunctl -d ${TAP[$c]}
                 fi
-                ;;
-            *)
-                if [ -d /proc/sys/net/ipv4/conf/${TAP0} ]; then
-                    sudo ovs-vsctl del-port ${BR0} ${TAP0}
-                    sudo /sbin/ifconfig ${TAP0} down
-                    sudo tunctl -d ${TAP0}
-                fi
-                if [ -n "${TAP1}" ]; then
-                    if [ -d /proc/sys/net/ipv4/conf/${TAP1} ]; then
-                        sudo ovs-vsctl del-port ${BR1} ${TAP1}
-                        sudo /sbin/ifconfig ${TAP1} down
-                        sudo tunctl -d ${TAP1}
-                    fi
-                fi
-                ;;
-        esac
+            done
+            ;;
+    esac
 } #end restore-lan
 
 function start {
@@ -222,68 +193,34 @@ function start {
     CMD+="-k en-us "
     CMD+="-m ${MEM} "
     CMD+="-monitor unix:${Sock},server,nowait "
-    # Nerwork interfaces
-#    COUNTER=0
-#    while [ $COUNTER -lt 10 ]; do
-#        BR=BR$COUNTER
-#        if [ ! -z $BR ]; then
-#            break
-#        fi
-#        TAP=TAP$COUNTER
-#        FakeMac=FakeMac$COUNTER
-
-#        case ${NETTYPE} in
-#            macvlan)
-#                CMD+="-net nic,vlan=${COUNTER},netdev=${TAP},macaddr=${FakeMac},model=virtio "
-#                CMD+="-netdev tap,fd=`expr $COUNTER + 1`,id=${TAP},vhost=on $COUNTER<>/dev/tap$(< /sys/class/net/v${TAP}/ifindex)"
-#            ;;
-#            ovs)
-#                CMD+="-net nic,vlan=${COUNTER},netdev=${TAP},macaddr=${FakeMac},model=virtio "
-#                CMD+="-netdev tap,id=${TAP},ifname=${TAP},script=no,vhost=on "
-#                ;;
-#            *)
-#                CMD+="-net nic,vlan=${COUNTER},netdev=${TAP},macaddr=${FakeMac},model=virtio "
-#                CMD+="-netdev tap,id=${TAP},ifname=${TAP},script=no,vhost=on "
-#                ;;
-#        esac
-#        CMD+="-net nic,vlan=${COUNTER},netdev=${TAP},macaddr=${FakeMac},model=virtio "
-#        CMD+="-netdev tap,id=${TAP},ifname=${TAP},script=no,vhost=on "
-#    done #end while
 
     case ${NETTYPE} in
         macvlan)
-            FD0=$(< /sys/class/net/v${TAP0}/ifindex)
-            FD1=$(< /sys/class/net/v${TAP1}/ifindex)
-            CMD+="-net nic,vlan=0,netdev=${TAP0},macaddr=${FakeMac0},model=virtio "
-            CMD+="-netdev tap,fd=${FD0},id=${TAP0},vhost=on ${FD0}<>/dev/tap${FD0} "
-            if [ -n "${BR1}" ]; then
-                CMD+="-net nic,vlan=1,netdev=${TAP1},macaddr=${FakeMac1},model=virtio "
-                CMD+="-netdev tap,fd=${FD1},id=${TAP1},vhost=on ${FD1}<>/dev/tap${FD1} "
-            fi
+            for (( c=0; c<${#TAP[*]}; c++ )); do
+                fd=$(< /sys/class/net/v${TAP[$c]}/ifindex)
+                CMD+="-net nic,vlan=0,netdev=${TAP[$c]},macaddr=${MACAddress[$c]},model=virtio "
+                CMD+="-netdev tap,fd=${fd},id=${TAP[$c]},vhost=on ${fd}<>/dev/tap${fd} "
+            done
             ;;
         ovs)
-            CMD+="-net nic,vlan=0,netdev=${TAP0},macaddr=${FakeMac0},model=virtio "
-            CMD+="-netdev tap,id=${TAP0},ifname=${TAP0},script=no,vhost=on "
-            if [ -n "${BR1}" ]; then
-                CMD+="-net nic,vlan=1,netdev=${TAP1},macaddr=${FakeMac1},model=virtio "
-                CMD+="-netdev tap,id=${TAP1},ifname=${TAP1},script=no,vhost=on "
-            fi
+            for (( c=0; c<${#TAP[*]}; c++ )); do
+                CMD+="-net nic,vlan=0,netdev=${TAP[$c]},macaddr=${MACAddress[$c]},model=virtio "
+                CMD+="-netdev tap,id=${TAP[$c]},ifname=${TAP[$c]},script=no,vhost=on "
+            done
             ;;
         *)
-            CMD+="-net nic,vlan=0,netdev=${TAP0},macaddr=${FakeMac0},model=virtio "
-            CMD+="-netdev tap,id=${TAP0},ifname=${TAP0},script=no,vhost=on "
-            if [ -n "${BR1}" ]; then
-                CMD+="-net nic,vlan=1,netdev=${TAP1},macaddr=${FakeMac1},model=virtio "
-                CMD+="-netdev tap,id=${TAP1},ifname=${TAP1},script=no,vhost=on "
-            fi
+            for (( c=0; c<${#TAP[*]}; c++ )); do
+                CMD+="-net nic,vlan=0,netdev=${TAP[$c]},macaddr=${MACAddress[$c]},model=virtio "
+                CMD+="-netdev tap,id=${TAP[$c]},ifname=${TAP[$c]},script=no,vhost=on "
+            done
             ;;
     esac
     
     # Hard Disks
-    CMD+="-drive index=0,media=disk,if=virtio,file=${IMG} "
-    if [ -n "${IMG1}" ]; then
-        CMD+="-drive index=1,media=disk,if=virtio,file=${IMG1} "
-    fi
+    for img in ${IMG[*]}; do
+        CMD+="-drive index=0,media=disk,if=virtio,file=${img} "
+    done
+
     # Append Option Argument
     if [ -n "${OPTARG}" ]; then
         CMD+="${OPTARG} "
@@ -350,7 +287,7 @@ function stop {
         echo "Socket has been removed! resotre Lan only."
     fi
 
-    ping -c 3 ${IP0}
+    ping -c 3 ${IPAddress[0]}
     if [ $? -eq 0 ]; then
         if [ -S ${Sock} ]; then
            echo "${Hostname} still alive, force quit!"
@@ -390,14 +327,15 @@ function configure {
 
     echo "Configure VM..."
 
+    img=$IMG[0]
     # We need to check the OS-img format for mounting and customize the OS
-    Format=`qemu-img info ${IMG} | grep "file format" | sed 's/file format: //'`
-    echo "I got ${IMG} format is: ${Format}"
+    Format=`qemu-img info ${img} | grep "file format" | sed 's/file format: //'`
+    echo "I got ${img} format is: ${Format}"
     if [ ${Format} == "raw" ]; then
-        Offset=`/sbin/fdisk -l ${IMG} | grep -F ${IMG}${PT} | tr -s ' ' | cut -d' ' -f 3`
+        Offset=`/sbin/fdisk -l ${img} | grep -F ${img}${PT} | tr -s ' ' | cut -d' ' -f 3`
         Offset=`expr ${Offset} '*' 512`
         sudo modprobe loop
-        sudo mount -o loop,offset=${Offset} ${IMG} /mnt/tmp
+        sudo mount -o loop,offset=${Offset} ${img} /mnt/tmp
     elif [ ${Format} == "qcow2" ] || [ ${Format} == "qed" ]; then
         sudo modprobe nbd max_part=16
         echo -n "Please wait nbd modile to be loaded."
@@ -406,7 +344,7 @@ function configure {
 	    sleep 1
         done
         echo ""
-        sudo qemu-nbd -c /dev/nbd0 ${IMG}
+        sudo qemu-nbd -c /dev/nbd0 ${img}
         echo -n "Please wait image to be connected."
         while [ ! -b /dev/nbd0p${PT} ]; do
 	    echo -n "."
@@ -429,7 +367,7 @@ echo "${Hostname}" >hostname
 cat <<EOF >hosts
 127.0.0.1        localhost
 # Without the next line, "\$ hostname --fqdn" can't produce the correct hostname.
-${IP0}       ${Hostname}
+${IPAddress[0]}       ${Hostname}
 
 # The following lines are desirable for IPv6 capable hosts
 ::1     localhost ip6-localhost ip6-loopback
@@ -440,13 +378,17 @@ EOF
 cat <<EOF >interfaces
 auto lo
 iface lo inet loopback
+EOF
 
-auto eth0
-iface eth0 inet static
-      address ${IP0}
-      netmask ${Netmask0}
+for (( c=0; c<${#Bridge[*]}; c++ )); do
+    cat <<EOF >>interfaces
+auto eth${c}
+iface eth${c} inet static
+      address ${IPAddress[$c]}
+      netmask ${Netmask[$c]}
       gateway ${Gateway}
 EOF
+done
 
 sudo mv hostname /mnt/tmp/etc/hostname
 sudo mv hosts /mnt/tmp/etc/hosts
@@ -493,7 +435,7 @@ fi
 function genconf {
 
     CheckBridge ${4}
-
+        
     # Argument name substitutiion
     IMG="${1}"
     Hostname="${2}"
@@ -517,8 +459,8 @@ function genconf {
     ip3="${x##*.}" ; x="${x%.*}"
     ip2="${x##*.}" ; x="${x%.*}"
     ip1="${x##*.}"
-    Netmask0=`/sbin/ifconfig ${BR0} | grep "Bcast" | sed 's/^[ \t]*.*Mask://'`
-    Bcast0=`/sbin/ifconfig ${BR0} | grep "Bcast" | tr -s ' ' | cut -d ' ' -f 4 | sed 's/^[ \t]*.*Bcast://'`
+    Netmask=`/sbin/ifconfig ${BR0} | grep "Bcast" | sed 's/^[ \t]*.*Mask://'`
+    Bcast=`/sbin/ifconfig ${BR0} | grep "Bcast" | tr -s ' ' | cut -d ' ' -f 4 | sed 's/^[ \t]*.*Bcast://'`
     let gw4="(${Bcast##*.}-1)" ; x="${Bcast%.*}"
     gw3="${x##*.}" ; x="${x%.*}"
     gw2="${x##*.}" ; x="${x%.*}"
@@ -531,7 +473,7 @@ function genconf {
     F4=`od -An -N1 -x /dev/random | sed 's/^\ 00//'`
     F5=`od -An -N1 -x /dev/random | sed 's/^\ 00//'`
     F6=`od -An -N1 -x /dev/random | sed 's/^\ 00//'`
-    FakeMac0=$PREFIX:${F4}:${F5}:${F6}
+    FakeMac=$PREFIX:${F4}:${F5}:${F6}
     echo " I got current IP: ${HostIP}, FakeMac: ${FakeMac}"
 
     if [ ! -d ../conf.d ]; then
@@ -549,10 +491,13 @@ function genconf {
     cat <<EOF >${Config}
 # ${Hostname} Configure file
 
+# Declare Arrays
+declare -a IMG
+declare -a Bridge TAP IPAddress Netmask MACAddress 
+
 Hostname=${Hostname}
 WHO=`whoami`
 MEM=512M
-IMG=${IMG}
 ROOT=1
 BOOTABLEFLAG=1
 Sock=${SockDir}/${Hostname}.sock
@@ -564,26 +509,20 @@ OPTARG=""
 # screen, serial-screen, serial-stdio, and *=monitor
 Console=screen
 
-# External Storage
-IMG1=
+# Virtual Image
+IMG=(${IMG} )
 
-# Network0 setting
+# Network setting
 # [ovs | macvlan] future uml-sw vde-sw
 NETTYPE=ovs
-BR0=${BR0}
-TAP0=${TAP}
-IP0=${VMIP}
-Netmask0=${Netmask0}
-FakeMac0=${FakeMac0}
-Gateway=${Gateway0}
+Bridge=(${BR0} )
+TAP=(${TAP} )
+IPAddress=(${VMIP} )
+Netmask=(${Netmask} )
+MACAddress=(${FakeMac} )
+Gateway=${Gateway}
 
-# Network1 setting
-BR1=
-TAP1=
-IP1=
-Netmask1=
-FakeMac1=
-
+# Pre/Post Scripts
 PRESTART=
 POSTSTART=
 PRESTOP=
