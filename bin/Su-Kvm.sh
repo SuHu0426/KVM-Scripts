@@ -217,8 +217,8 @@ function start {
     esac
     
     # Hard Disks
-    for img in ${IMG[*]}; do
-        CMD+="-drive index=0,media=disk,if=virtio,file=${img} "
+    for (( c=0; c<${#IMG[*]}; c++ )); do
+        CMD+="-drive index=${c},media=disk,if=virtio,file=${IMG[$c]} "
     done
 
     # Append Option Argument
@@ -327,7 +327,7 @@ function configure {
 
     echo "Configure VM..."
 
-    img=$IMG[0]
+    img=${IMG[0]}
     # We need to check the OS-img format for mounting and customize the OS
     Format=`qemu-img info ${img} | grep "file format" | sed 's/file format: //'`
     echo "I got ${img} format is: ${Format}"
