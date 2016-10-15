@@ -303,6 +303,11 @@ function stop {
 
     restore-lan
 
+    # wipe screen
+    if [ "${Console}" == "screen"]; then
+        screen -wipe ${Hostname}
+    fi
+
     # POST stop script
     if [ -n "${POSTSTOP}" ]; then
         echo "Executing post-stop script"
