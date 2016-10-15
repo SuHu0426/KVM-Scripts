@@ -198,19 +198,19 @@ function start {
         macvlan)
             for (( c=0; c<${#TAP[*]}; c++ )); do
                 fd=$(< /sys/class/net/v${TAP[$c]}/ifindex)
-                CMD+="-net nic,vlan=0,netdev=${TAP[$c]},macaddr=${MACAddress[$c]},model=virtio "
+                CMD+="-net nic,vlan=${c},netdev=${TAP[$c]},macaddr=${MACAddress[$c]},model=virtio "
                 CMD+="-netdev tap,fd=${fd},id=${TAP[$c]},vhost=on ${fd}<>/dev/tap${fd} "
             done
             ;;
         ovs)
             for (( c=0; c<${#TAP[*]}; c++ )); do
-                CMD+="-net nic,vlan=0,netdev=${TAP[$c]},macaddr=${MACAddress[$c]},model=virtio "
+                CMD+="-net nic,vlan=${c},netdev=${TAP[$c]},macaddr=${MACAddress[$c]},model=virtio "
                 CMD+="-netdev tap,id=${TAP[$c]},ifname=${TAP[$c]},script=no,vhost=on "
             done
             ;;
         *)
             for (( c=0; c<${#TAP[*]}; c++ )); do
-                CMD+="-net nic,vlan=0,netdev=${TAP[$c]},macaddr=${MACAddress[$c]},model=virtio "
+                CMD+="-net nic,vlan=${c},netdev=${TAP[$c]},macaddr=${MACAddress[$c]},model=virtio "
                 CMD+="-netdev tap,id=${TAP[$c]},ifname=${TAP[$c]},script=no,vhost=on "
             done
             ;;
@@ -513,8 +513,8 @@ Console=screen
 IMG=(${IMG} )
 
 # Network setting
-# [ovs | macvlan] future uml-sw vde-sw
-NETTYPE=ovs
+# [ovs | macvlan] (uml-sw and vde-sw not yet)
+NETTYPE=macvlan
 Bridge=(${BR0} )
 TAP=(${TAP} )
 IPAddress=(${VMIP} )
