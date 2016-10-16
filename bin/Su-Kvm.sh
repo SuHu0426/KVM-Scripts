@@ -303,9 +303,9 @@ function stop {
 
     restore-lan
 
-    # wipe screen
-    if [ "${Console}" == "screen"]; then
-        screen -wipe ${Hostname}
+    # quit screen
+    if [ "${Console}" == "screen" ]; then
+        screen -X -S ${Hostname} quit
     fi
 
     # POST stop script
