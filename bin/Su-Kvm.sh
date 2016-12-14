@@ -335,9 +335,9 @@ function configure {
     img=${IMG[0]}
     # We need to check the OS-img format for mounting and customize the OS
     Format=`qemu-img info ${img} | grep "file format" | sed 's/file format: //'`
-    echo "I got ${img} format is: ${Format}"
+    echo "I got "${img}" format is: ${Format}"
     if [ ${Format} == "raw" ]; then
-        Offset=`/sbin/fdisk -l ${img} | grep -F ${img}${PT} | tr -s ' ' | cut -d' ' -f 3`
+        Offset=`/sbin/fdisk -l "${img}" | grep -F "${img}""${PT}" | tr -s ' ' | cut -d' ' -f 3`
         Offset=`expr ${Offset} '*' 512`
         sudo modprobe loop
         sudo mount -o loop,offset=${Offset} ${img} /mnt/tmp
@@ -460,12 +460,21 @@ function genconf {
     # We need to get the Ip of the assigned ether card and its MAC address and get a
     # fake MAC address for our VM.
     HostIP=`/sbin/ifconfig ${BR0} | grep "Bcast" | sed 's/^[ \t]*inet addr://' | sed 's/[ \t]*Bcast:.*$//'`
+    if [ "x${HostIP}" == "x" ]; then
+        HostIP=`/sbin/ifconfig ${BR0} | grep "inet " | tr -s ' ' | cut -d' ' -f 3`
+    fi
     ip4="${HostIP##*.}" ; x="${HostIP%.*}"
     ip3="${x##*.}" ; x="${x%.*}"
     ip2="${x##*.}" ; x="${x%.*}"
     ip1="${x##*.}"
     Netmask=`/sbin/ifconfig ${BR0} | grep "Bcast" | sed 's/^[ \t]*.*Mask://'`
+    if [ "x${Netmask}" == "x" ]; then
+        Netmask=`/sbin/ifconfig ${BR0} | grep "netmask" | tr -s ' ' | cut -d' ' -f 5`
+    fi
     Bcast=`/sbin/ifconfig ${BR0} | grep "Bcast" | tr -s ' ' | cut -d ' ' -f 4 | sed 's/^[ \t]*.*Bcast://'`
+    if [ "x${Bcast}" == "x" ]; then
+        Bcast=`/sbin/ifconfig ${BR0} | grep "broadcast" | tr -s ' ' | cut -d' ' -f 7`
+    fi
     let gw4="(${Bcast##*.}-1)" ; x="${Bcast%.*}"
     gw3="${x##*.}" ; x="${x%.*}"
     gw2="${x##*.}" ; x="${x%.*}"
